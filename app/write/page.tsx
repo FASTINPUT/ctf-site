@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -8,11 +9,47 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+type Category = {
+  id: number;
+  name: string;
+  slug: string;
+};
+
 export default function WritePage() {
+  const router = useRouter();
+
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("web");
+  const [category, setCategory] = useState("");
   const [content, setContent] = useState("");
   const [message, setMessage] = useState("");
+  const [checkingLogin, setCheckingLogin] = useState(true);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    async function init() {
+      const { data: userData } = await supabase.auth.getUser();
+
+      if (!userData.user) {
+        router.push("/login");
+        return;
+      }
+
+      const { data: categoryData } = await supabase
+        .from("categories")
+        .select("*")
+        .order("id", { ascending: true });
+
+      setCategories(categoryData || []);
+
+      if (categoryData && categoryData.length > 0) {
+        setCategory(categoryData[0].slug);
+      }
+
+      setCheckingLogin(false);
+    }
+
+    init();
+  }, [router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,13 +70,16 @@ export default function WritePage() {
 
     setMessage("저장 성공!");
     setTitle("");
-    setCategory("web");
     setContent("");
+  }
+
+  if (checkingLogin) {
+    return <main className="p-10 text-white">로그인 확인 중...</main>;
   }
 
   return (
     <main className="p-10 max-w-3xl">
-      <h1 className="text-3xl font-bold mb-6">Write Report</h1>
+      <h1 className="text-3xl font-bold mb-6 text-white">Write Report</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
@@ -54,9 +94,11 @@ export default function WritePage() {
           value={category}
           onChange={(e) => setCategory(e.target.value)}
         >
-          <option value="web">Web</option>
-          <option value="pwn">Pwn</option>
-          <option value="crypto">Crypto</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.slug}>
+              {cat.name}
+            </option>
+          ))}
         </select>
 
         <textarea
@@ -71,7 +113,7 @@ export default function WritePage() {
         </button>
       </form>
 
-      {message && <p className="mt-4">{message}</p>}
+      {message && <p className="mt-4 text-white">{message}</p>}
     </main>
   );
 }
