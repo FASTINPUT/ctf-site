@@ -26,28 +26,28 @@ export default function AuthButtons() {
       <>
         <Link
           href="/write"
-          className="px-4 py-2 bg-blue-600 text-white rounded"
+          className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
         >
           글 작성
         </Link>
 
         <Link
           href="/add-category"
-          className="px-4 py-2 bg-green-600 text-white rounded"
+          className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-500"
         >
           카테고리 추가
         </Link>
 
         <Link
           href="/manage-categories"
-          className="px-4 py-2 bg-yellow-600 text-white rounded"
+          className="rounded-xl bg-yellow-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-yellow-400"
         >
           카테고리 관리
         </Link>
 
         <Link
           href="/logout"
-          className="px-4 py-2 bg-red-600 text-white rounded"
+          className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500"
         >
           로그아웃
         </Link>
@@ -58,7 +58,7 @@ export default function AuthButtons() {
   return (
     <Link
       href="/login"
-      className="px-4 py-2 bg-white text-black rounded"
+      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
     >
       로그인
     </Link>
