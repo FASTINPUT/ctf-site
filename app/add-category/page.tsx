@@ -72,7 +72,7 @@ export default function AddCategoryPage() {
 
     setTimeout(() => {
       router.push("/");
-    }, 1000);
+    }, 800);
   }
 
   if (checkingLogin) {
@@ -80,23 +80,34 @@ export default function AddCategoryPage() {
   }
 
   return (
-    <main className="p-10 max-w-md text-white">
-      <h1 className="text-3xl font-bold mb-6">카테고리 추가</h1>
+    <main className="min-h-screen px-6 py-12 text-white">
+      <section className="mx-auto max-w-md">
+        <div className="mb-8 rounded-2xl border border-slate-700 bg-slate-900/70 p-8 shadow-xl">
+          <p className="mb-2 text-sm text-blue-300">Admin</p>
+          <h1 className="text-4xl font-bold">카테고리 추가</h1>
+          <p className="mt-3 text-slate-400">
+            새 풀이 분류를 추가합니다. 예: Forensic, Reversing, C언어
+          </p>
+        </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          className="w-full p-3 border rounded bg-white text-black"
-          placeholder="카테고리 이름 (예: Forensic)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-5 rounded-2xl border border-slate-700 bg-slate-900/70 p-8 shadow-xl"
+        >
+          <input
+            className="w-full rounded-xl border border-slate-600 bg-slate-950 p-4 text-white placeholder:text-slate-500"
+            placeholder="카테고리 이름"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
 
-        <button className="px-4 py-2 bg-white text-black rounded">
-          추가하기
-        </button>
-      </form>
+          <button className="w-full rounded-xl bg-green-600 px-5 py-3 font-semibold text-white">
+            추가하기
+          </button>
+        </form>
 
-      {message && <p className="mt-4">{message}</p>}
+        {message && <p className="mt-4 text-slate-300">{message}</p>}
+      </section>
     </main>
   );
 }

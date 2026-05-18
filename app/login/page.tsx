@@ -29,35 +29,46 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/write");
+    router.push("/");
   }
 
   return (
-    <main className="p-10 max-w-md text-white">
-      <h1 className="text-3xl font-bold mb-6">관리자 로그인</h1>
+    <main className="min-h-screen px-6 py-12 text-white">
+      <section className="mx-auto max-w-md">
+        <div className="mb-8 rounded-2xl border border-slate-700 bg-slate-900/70 p-8 shadow-xl">
+          <p className="mb-2 text-sm text-blue-300">Admin</p>
+          <h1 className="text-4xl font-bold">관리자 로그인</h1>
+          <p className="mt-3 text-slate-400">
+            글 작성, 수정, 삭제는 관리자 로그인 후 가능합니다.
+          </p>
+        </div>
 
-      <form onSubmit={handleLogin} className="space-y-4">
-        <input
-          className="w-full p-3 border rounded bg-white text-black"
-          placeholder="이메일"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <form
+          onSubmit={handleLogin}
+          className="space-y-5 rounded-2xl border border-slate-700 bg-slate-900/70 p-8 shadow-xl"
+        >
+          <input
+            className="w-full rounded-xl border border-slate-600 bg-slate-950 p-4 text-white placeholder:text-slate-500"
+            placeholder="이메일"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
 
-        <input
-          className="w-full p-3 border rounded bg-white text-black"
-          type="password"
-          placeholder="비밀번호"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+          <input
+            className="w-full rounded-xl border border-slate-600 bg-slate-950 p-4 text-white placeholder:text-slate-500"
+            type="password"
+            placeholder="비밀번호"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
-        <button className="px-4 py-2 bg-white text-black rounded">
-          로그인
-        </button>
-      </form>
+          <button className="w-full rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white">
+            로그인
+          </button>
+        </form>
 
-      {message && <p className="mt-4">{message}</p>}
+        {message && <p className="mt-4 text-red-400">{message}</p>}
+      </section>
     </main>
   );
 }

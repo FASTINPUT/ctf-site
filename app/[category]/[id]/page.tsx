@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
@@ -26,22 +27,16 @@ export default function PostDetail() {
   const id = params.id as string;
 
   const [post, setPost] = useState<Post | null>(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [deleteMessage, setDeleteMessage] = useState("");
-
+  const [currentPage, setCurrentPage] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    async function init() {
-      // 🔥 로그인 체크
-      const { data } = await supabase.auth.getSession();
+    async function fetchPost() {
+      const { data: sessionData } = await supabase.auth.getSession();
+      setIsLoggedIn(!!sessionData.session);
 
-      setIsLoggedIn(!!data.session);
-      setCheckingAuth(false);
-
-      // 🔥 글 불러오기
-      const { data: postData, error } = await supabase
+      const { data, error } = await supabase
         .from("posts")
         .select("*")
         .eq("id", id)
@@ -53,10 +48,10 @@ export default function PostDetail() {
         return;
       }
 
-      setPost(postData);
+      setPost(data);
     }
 
-    if (id && category) init();
+    if (id && category) fetchPost();
   }, [id, category]);
 
   async function handleDelete() {
@@ -68,57 +63,171 @@ export default function PostDetail() {
     const { error } = await supabase.from("posts").delete().eq("id", post.id);
 
     if (error) {
-      setDeleteMessage("삭제 실패: " + error.message);
+      setErrorMessage(error.message);
       return;
     }
 
-    router.push(`/${post.category}`);
+    router.push(`/${category}`);
   }
 
   if (errorMessage) {
-    return (
-      <main className="p-10 text-white">
-        <h1 className="text-2xl font-bold mb-4">글을 불러오지 못했습니다</h1>
-        <p>{errorMessage}</p>
-      </main>
-    );
+    return <main className="p-10 text-red-400">{errorMessage}</main>;
   }
 
-  if (!post || checkingAuth) {
+  if (!post) {
     return <main className="p-10 text-white">불러오는 중...</main>;
   }
 
+  const pages = post.content ? post.content.split("---PAGE---") : [""];
+  const pageContent = pages[currentPage] || "";
+
   return (
-    <main className="p-10 max-w-3xl text-white">
-      <h1 className="text-3xl font-bold mb-4">{post.title}</h1>
-
-      {/* 🔥 로그인한 경우만 버튼 */}
-      {isLoggedIn && (
-        <div className="flex items-center gap-3 mb-6">
-          <Link
-            href={`/edit/${post.id}`}
-            className="px-4 py-2 rounded bg-white text-black text-sm font-medium"
-          >
-            수정
+    <main className="min-h-screen px-6 py-12 text-white">
+      <section className="mx-auto max-w-4xl">
+        <div className="mb-6 flex gap-4 text-sm">
+          <Link href={`/${category}`} className="text-blue-300 underline">
+            ← 목록
           </Link>
-
-          <button
-            onClick={handleDelete}
-            className="px-4 py-2 rounded bg-red-600 text-white text-sm font-medium"
-          >
-            삭제
-          </button>
+          <Link href="/" className="text-blue-300 underline">
+            홈으로
+          </Link>
         </div>
-      )}
 
-      <p className="mb-6 text-gray-300">
-        카테고리: {post.category} /{" "}
-        {new Date(post.created_at).toLocaleString()}
-      </p>
+        <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-8 shadow-xl">
+          <p className="mb-3 text-sm text-blue-300">
+            {post.category} / {new Date(post.created_at).toLocaleString()}
+          </p>
 
-      <div className="whitespace-pre-wrap">{post.content}</div>
+          <h1 className="mb-6 text-4xl font-bold">{post.title}</h1>
 
-      {deleteMessage && <p className="mt-4 text-red-400">{deleteMessage}</p>}
+          {isLoggedIn && (
+            <div className="mb-8 flex gap-3 border-b border-slate-700 pb-6">
+              <Link
+                href={`/edit/${post.id}`}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+              >
+                수정
+              </Link>
+
+              <button
+                onClick={handleDelete}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white"
+              >
+                삭제
+              </button>
+            </div>
+          )}
+
+          <p className="mb-4 text-sm text-slate-400">
+            {currentPage + 1} / {pages.length} 페이지
+          </p>
+
+          <div className="min-h-[320px] rounded-xl border border-slate-800 bg-slate-950/50 p-6 leading-8 text-slate-100">
+            <ReactMarkdown
+              components={{
+                h1: ({ children }) => (
+                  <h1 className="mb-4 mt-2 text-3xl font-bold text-white">
+                    {children}
+                  </h1>
+                ),
+                h2: ({ children }) => (
+                  <h2 className="mb-3 mt-6 text-2xl font-bold text-blue-300">
+                    {children}
+                  </h2>
+                ),
+                h3: ({ children }) => (
+                  <h3 className="mb-2 mt-5 text-xl font-semibold text-blue-200">
+                    {children}
+                  </h3>
+                ),
+                p: ({ children }) => (
+                  <p className="mb-4 whitespace-pre-wrap text-slate-100">
+                    {children}
+                  </p>
+                ),
+                ul: ({ children }) => (
+                  <ul className="mb-4 ml-6 list-disc space-y-1">
+                    {children}
+                  </ul>
+                ),
+                ol: ({ children }) => (
+                  <ol className="mb-4 ml-6 list-decimal space-y-1">
+                    {children}
+                  </ol>
+                ),
+                li: ({ children }) => <li>{children}</li>,
+                a: ({ href, children }) => (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-300 underline"
+                  >
+                    {children}
+                  </a>
+                ),
+                img: ({ src, alt }) => (
+                  <img
+                    src={src || ""}
+                    alt={alt || "image"}
+                    className="my-6 max-w-full rounded-xl border border-slate-700"
+                  />
+                ),
+                code: ({ children }) => (
+                  <code className="rounded bg-slate-800 px-1 py-0.5 text-sm text-blue-200">
+                    {children}
+                  </code>
+                ),
+                pre: ({ children }) => (
+                  <pre className="mb-4 overflow-x-auto rounded-xl bg-slate-950 p-4 text-sm">
+                    {children}
+                  </pre>
+                ),
+              }}
+            >
+              {pageContent}
+            </ReactMarkdown>
+          </div>
+
+          {pages.length > 1 && (
+            <div className="mt-8 flex items-center justify-between gap-4">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 0))}
+                disabled={currentPage === 0}
+                className="rounded-lg bg-white px-4 py-2 text-black disabled:opacity-40"
+              >
+                이전
+              </button>
+
+              <div className="flex flex-wrap gap-2">
+                {pages.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentPage(index)}
+                    className={`rounded-lg px-3 py-1 text-sm ${
+                      currentPage === index
+                        ? "bg-blue-600 text-white"
+                        : "bg-slate-700 text-white"
+                    }`}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(p + 1, pages.length - 1))
+                }
+                disabled={currentPage === pages.length - 1}
+                className="rounded-lg bg-white px-4 py-2 text-black disabled:opacity-40"
+              >
+                다음
+              </button>
+            </div>
+          )}
+        </article>
+      </section>
     </main>
   );
 }
