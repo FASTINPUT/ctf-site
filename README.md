@@ -1,36 +1,112 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FASTINPUT CTF Writeups
 
-## Getting Started
+Next.js 16.2.6 / React 19 / TypeScript / Tailwind CSS 4 / Supabase 기반 개인 CTF 아카이브.
+기존 `posts`, `categories`, `post-files` 및 `---PAGE---` 본문 형식을 유지합니다.
 
-First, run the development server:
+## 실행
+
+Node.js 20.9 이상(권장 22 또는 24 LTS)과 npm을 사용합니다.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`.env.example`을 `.env.local`로 복사한 뒤 **기존 Supabase 프로젝트**의 공개 URL과 anon/publishable 키를 입력하세요.
+Windows PowerShell: `Copy-Item .env.example .env.local`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=기존_프로젝트_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY=기존_프로젝트_공개_anon_키
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+서비스 롤/secret 키를 넣지 마세요. 이 변수는 브라우저 번들에 포함됩니다.
+환경변수가 없으면 연결 안내를 표시하며 로그인·DB 요청을 시작하지 않습니다.
+설정 후 `npm run dev`, 운영 환경에서는 `npm run build`와 `npm start`를 사용하세요.
 
-## Learn More
+## 최초 적용 순서 — 기존 관리자 접근 유지
 
-To learn more about Next.js, take a look at the following resources:
+운영 DB에 SQL을 바로 일괄 실행하지 말고, 백업 및 검토 후 순서대로 적용하세요.
+이 소스 제공 작업에서는 실제 DB, 계정, 버킷, 배포 설정을 변경하지 않았습니다.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Supabase에서 `posts`, `categories` 데이터, 전체 스키마/RLS 정의를 백업하고 `post-files` 파일을 별도로 보존합니다. 백업 복구 가능 여부를 확인합니다.
+2. SQL Editor에서 `sql/00_audit.sql`을 실행합니다. 필드 타입·기존 RLS·버킷 공개 설정·중복 slug·고아 게시글·앱 경로 충돌을 검토하세요. 실제 DB 스키마는 첨부 코드만으로 확정할 수 없습니다.
+3. 기존 관리자 계정의 UUID를 Authentication → Users에서 확인합니다. SQL Editor에서 **그 UUID 한 개**에만 다음을 적용합니다. 기존 app metadata의 다른 값은 유지됩니다.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```sql
+update auth.users
+set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
+where id = 'REPLACE_WITH_EXISTING_ADMIN_UUID';
+```
 
-## Deploy on Vercel
+변경 행 수가 1개인지 확인하세요. 임의 계정을 새 관리자로 지정하지 않습니다. `user_metadata`의 role은 권한 판정에 사용하지 않습니다. Auth UI에서 app_metadata를 수정할 수 있는 관리 환경이면 같은 값을 그곳에서 지정해도 됩니다.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+4. `sql/01_metadata.sql`을 검토 후 적용합니다. 추가 메타데이터는 NULL을 허용합니다. 기존 글의 `content`, `category`, 파일 주소는 업데이트하지 않습니다. `updated_at`은 과거 수정 시각을 추정하지 않고 NULL로 유지하다가 다음 실제 수정 시 DB 트리거가 기록합니다. `pg_trgm` 확장 설치 권한과 `extensions` 스키마를 확인하세요.
+5. 관리자 표시를 위한 `fi_is_admin()`과 실제 쓰기 제한을 만드는 `sql/02_access.sql`을 적용합니다. 공개 읽기·관리자 쓰기를 분리하고 과거 permissive 정책의 우회를 막는 restrictive guard를 추가합니다. 기존의 다른 restrictive 정책이 새로운 정책보다 더 제한적일 수 있으니 감사 결과와 비교하세요.
+6. **로그아웃 후 재로그인**하여 app_metadata가 반영된 새 JWT를 받습니다. 기존 세션 토큰은 예전 역할을 포함할 수 있습니다. 관리 버튼이 보이지 않으면 먼저 SQL과 토큰 갱신을 확인하세요. RPC 누락·오류 시 UI는 관리자 기능을 숨깁니다.
+7. 중복 slug를 직접 해결한 후 `sql/03_category_integrity.sql`을 적용합니다. FK는 `NOT VALID`로 추가하여 기존 고아 글을 자동 삭제하거나 이동하지 않습니다. 이후 고아 글을 적절한 분류로 수동 이동한 뒤 주석의 VALIDATE를 적용하세요. 새 잘못된 관계, 글이 연결된 카테고리 삭제, URL slug 변경은 DB에서도 차단됩니다.
+8. 아래 운영 검증 체크리스트를 실행한 후 코드를 배포합니다. 이전 사이트로 롤백하더라도 새 RLS 때문에 관리자 역할이 필요합니다. SQL을 무작정 삭제해 권한을 다시 개방하지 마세요.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 스키마 호환성
+
+코드에서 확인한 기존 관계는 `posts.category` → `categories.slug` 문자열입니다. 카테고리 이름 변경은 `name`만 수정해 기존 URL을 보존합니다. 신규 카테고리에 예약 경로를 사용할 수 없습니다.
+기존 ID는 첨부 소스와 동일하게 number로 취급합니다. 실제 ID 타입이 UUID 또는 JS 정수 범위를 넘는 bigint이면 타입과 북마크 형식을 별도로 조정해야 합니다.
+마이그레이션 전에도 기존 필드만 사용하는 조회 fallback이 있어 글 목록·본문은 유지됩니다. **새 에디터 저장과 관리자 접근, 메타데이터 필터는 SQL 적용이 필요합니다.** 누락된 SQL 때문에 저장이 실패하면 기존 글은 덮어쓰지 않습니다.
+
+## 사용법
+
+- Dashboard: 실제 글 수, 카테고리 수, 최근 30일 작성 수, 최근 작성/수정일, 최근 글과 분야별 카드를 표시합니다. 통계는 공개 접근 시 RLS로 읽을 수 있는 레코드만 사용합니다.
+- All Writeups: DB에서 제목/본문 검색, 카테고리·플랫폼·난이도 필터, 작성/수정일·제목 정렬, 12개 단위 페이지 이동. 데이터가 있는 메타데이터 필터만 노출합니다.
+- 새 글/수정: 공통 에디터, Markdown 툴바, 작성·미리보기·분할 보기, 분야별 템플릿, 메타데이터 입력을 지원합니다. 모바일 분할 보기에서는 작성 화면을 표시하고 미리보기 탭으로 전환합니다.
+- 페이지: 추가·삭제·제목·순서 변경을 지원합니다. 저장 시 `---PAGE---`를 그대로 사용하고, 제목은 별도 `page_titles` 배열에 저장합니다. 수정하지 않은 기존 본문은 공백까지 유지됩니다.
+- 업로드: 드롭·선택·클립보드 이미지를 지원합니다. PNG/JPEG/WebP/GIF/PDF, 파일당 10MiB, MIME·확장자·파일 시그니처 검사. 고유 파일명으로 기존 `post-files`에 저장합니다. 진행 상태는 파일 단위이며 바이트별 퍼센트는 제공하지 않습니다. 본문에 들어간 이미지는 미리보기에서 확인합니다. 공개 첨부 URL을 그대로 유지합니다.
+- 초안: 계정 UUID와 글 ID별 localStorage에 입력 중지 1.2초 후 저장합니다. 다음 접속에서 복구/폐기를 선택하며, 관리자 Dashboard에서 이 기기의 초안 목록을 봅니다. 기기·브라우저 간 동기화는 없습니다. 공용 PC에서는 사용 후 초안을 지우세요.
+- 초안에는 인증 비밀번호가 포함되지 않습니다. 잘 알려진 일부 private-key/토큰 패턴은 자동 저장을 중단하고 기존 초안을 지웁니다. 일반적인 비밀값을 모두 탐지하지 못하므로 키·토큰·비밀번호를 본문에 붙이지 마세요. 보안 저장소나 암호화 기능이 아닙니다.
+- 상세 보기: 현재 페이지의 H2/H3 목차, 현재 섹션 표시, 언어명·문법 강조·코드 복사, 표/체크리스트, 이전·다음 글, 같은 카테고리 관련 글, 링크 복사, 북마크를 지원합니다. 이전/다음 글은 같은 카테고리의 ID 순서 기준입니다.
+- 북마크는 이 브라우저의 localStorage에만 저장됩니다. 삭제된 글은 북마크 목록에서 표시하지 않습니다.
+- 글 복제는 새 글 작성기로 원문을 가져오며 **자동 발행하거나 원문을 덮어쓰지 않습니다.**
+- Markdown 내보내기는 원문/페이지 구분자를 담은 `.md`를 내려받습니다. 이미지·PDF를 함께 묶지 않고 기존 첨부 URL을 유지합니다.
+- 통계는 카테고리·작성 월·난이도·플랫폼별 실제 수치를 집계합니다. 수정 횟수나 활동 일수를 만들어내지 않습니다.
+- `Ctrl+K` / `⌘+K`로 상단 검색에 포커스합니다. 사이드바 상태는 브라우저에 저장됩니다. 모바일은 드로어, 대화상자는 Escape·Tab·포커스 이동을 브라우저 기본 dialog로 처리합니다.
+
+### FLAG 스포일러
+
+```text
+:::spoiler FLAG / 정답
+정답 내용을 여기에 기록합니다.
+:::
+```
+
+기본적으로 접혀 표시됩니다. 공개 HTML/소스/API에는 포함되어 있으므로 **비공개 정보 보호 기능이 아닙니다.** 기존 본문에서 FLAG를 임의 추출하거나 삭제하지 않습니다. 자동 FLAG 탐지는 없습니다. 관리자가 감출 구간을 직접 지정합니다.
+`is_public=false` 데이터는 RLS로 일반 조회를 제한할 수 있지만, 현재 에디터는 공개 아카이브용으로 새 글을 작성합니다. 기존 공개 Storage 첨부 URL은 DB의 is_public 변경만으로 비공개가 되지 않습니다.
+
+## 보안 및 운영 제한
+
+- UI의 관리자 확인은 편의 기능입니다. 실제 보안 경계는 Supabase RLS/Storage 정책입니다. SQL이 실제 적용되기 전에는 보호가 완료됐다고 볼 수 없습니다.
+- Storage는 관리자의 쓰기, 허용 MIME, 파일 크기를 서버에서 제한합니다. 브라우저의 확장자/시그니처 검사는 악성 직접 API 호출로 우회할 수 있습니다. Supabase Storage MIME 제한 자체가 바이너리 시그니처·악성 PDF·악성코드 검사기는 아닙니다. 더 강한 보장이 필요하면 별도 서버 업로드 검증/악성코드 검사 경유로 확장하세요. 현재는 허용된 관리자만 업로드하는 구조입니다.
+- 기존 버킷의 공개 설정은 변경하지 않습니다. 기존 에디터가 getPublicUrl을 사용했으므로 `post-files`가 public인지 확인하세요. 버킷이 없으면 수동 생성이 필요합니다. 기존 첨부 파일을 삭제하거나 공개 URL을 재작성하지 않습니다.
+- 파일 첨부 후 글 발행 취소 또는 글 삭제 시 파일은 자동 삭제하지 않습니다. 연결 여부를 수동 점검해 고아 파일을 정리하세요. 업로드 일부 성공 후 실패하면 성공한 파일의 본문 링크는 유지됩니다.
+- react-markdown은 raw HTML을 실행하지 않고, 링크/이미지 URL scheme을 제한합니다. 외부 링크에는 noopener/noreferrer를 적용합니다. 코드 강조는 HTML 문자열을 직접 삽입하지 않습니다.
+- 브라우저 이탈 경고는 새로고침/닫기와 일반 링크 이동에 적용합니다. 브라우저 뒤로/앞으로 및 브라우저가 억제한 경고는 완벽하게 차단할 수 없습니다. 로컬 자동 저장과 함께 사용하세요.
+- 검색은 debounce + 서버 필터·정렬·페이지 나누기 + trigram 인덱스를 사용합니다. 통계는 본문 없이 500개씩 요약을 읽습니다. 아주 큰 아카이브는 서버 집계 RPC/캐시로 전환하세요. 원격 이미지는 크기를 알 수 없어 lazy native img를 사용합니다.
+- npm 패키지와 잠금 파일을 함께 유지하세요. 외부 폰트 다운로드 없이 시스템 폰트를 사용합니다. Node/Next/Supabase 보안 업데이트는 별도 의존성 점검 후 적용하세요.
+
+## 검증
+
+```bash
+npm run lint
+npx tsc --noEmit
+npm test
+npm run build
+```
+
+`tests/*.test.tsx`는 기존 다중 페이지 왕복·내용 보존, 파일 유형/크기/시그니처, 경로/검색 입력, GFM·HTML/URL 안전성·스포일러·코드 블록, DB 검색 요청·범위·구버전 projection을 검증합니다.
+검색 요청 테스트는 가짜 응답을 테스트에만 사용하며 운영 UI에 예시 통계를 넣지 않습니다.
+실행 결과와 미검증 사항은 `docs/IMPLEMENTATION_REPORT.md`, 실제 서비스 체크리스트는 `docs/LIVE_CHECKLIST.md`를 확인하세요.
+
+## GitHub / 현재 배포 환경 반영
+
+1. 이 폴더의 변경 파일·package.json·package-lock.json·sql·docs를 기존 GitHub 저장소에 반영합니다. `.env.local`, `node_modules`, `.next`, 실제 인증 정보는 커밋하지 마세요.
+2. 위 SQL 적용·권한 점검을 완료한 뒤 기존 호스팅의 두 공개 환경변수가 **같은 기존 Supabase 프로젝트**를 가리키는지 확인합니다. 기존 서비스 연결을 새 DB로 대체하지 않습니다.
+3. 호스팅의 Node 버전과 `npm run build`, `npm start` 설정을 유지합니다. Vercel이면 Next.js 프리셋을 사용합니다. 기존 빌드/배포 경로가 다르면 해당 플랫폼의 현재 설정을 따릅니다.
+4. 먼저 별도 Preview 배포에서 운영 체크리스트를 수행하고 정상 확인 후 기존 production 브랜치에 병합합니다. 환경변수가 빌드 시 번들에 들어가므로 수정 후 재빌드해야 합니다.
+5. 문제 발생 시 이전 Git 커밋을 재배포합니다. 추가된 컬럼은 제거하지 않고 기존 데이터·파일을 유지합니다.

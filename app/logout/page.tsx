@@ -1,25 +1,15 @@
 "use client";
-
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-export default function LogoutPage() {
-  const router = useRouter();
-
+import { supabase } from "@/app/lib/supabase";
+export default function Logout() {
+  const router = useRouter(),
+    [error, setError] = useState("");
   useEffect(() => {
-    async function logout() {
-      await supabase.auth.signOut();
-      router.push("/");
-    }
-
-    logout();
+    supabase.auth.signOut().then(({ error }) => {
+      if (error) setError("로그아웃에 실패했습니다. 다시 시도하세요.");
+      else router.replace("/");
+    });
   }, [router]);
-
-  return <main className="p-10 text-white">로그아웃 중...</main>;
+  return <main role="status">{error || "로그아웃 중…"}</main>;
 }

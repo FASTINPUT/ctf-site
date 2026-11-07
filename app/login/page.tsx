@@ -1,74 +1,67 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-export default function LoginPage() {
+import { supabase } from "@/app/lib/supabase";
+import { Button, Card, Input, Toast } from "../components/ui";
+export default function Login() {
   const router = useRouter();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setMessage("로그인 실패: " + error.message);
-      return;
-    }
-
-    router.push("/");
-  }
-
+  const [email, setEmail] = useState(""),
+    [password, setPassword] = useState(""),
+    [message, setMessage] = useState(""),
+    [busy, setBusy] = useState(false);
   return (
-    <main className="min-h-screen px-6 py-12 text-white">
-      <section className="mx-auto max-w-md">
-        <div className="mb-8 rounded-2xl border border-slate-700 bg-slate-900/70 p-8 shadow-xl">
-          <p className="mb-2 text-sm text-blue-300">Admin</p>
-          <h1 className="text-4xl font-bold">관리자 로그인</h1>
-          <p className="mt-3 text-slate-400">
-            글 작성, 수정, 삭제는 관리자 로그인 후 가능합니다.
-          </p>
-        </div>
-
+    <main className="auth-card">
+      <span className="eyebrow">FASTINPUT / ACCOUNT</span>
+      <h1>다시 오셨군요.</h1>
+      <p className="muted">관리자 계정으로 학습 기록을 이어가세요.</p>
+      <Card>
         <form
-          onSubmit={handleLogin}
-          className="space-y-5 rounded-2xl border border-slate-700 bg-slate-900/70 p-8 shadow-xl"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (busy) return;
+            setBusy(true);
+            try {
+              const { error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+              });
+              if (error) throw error;
+              router.push("/");
+            } catch {
+              setMessage(
+                "로그인에 실패했습니다. 계정 정보와 연결을 확인하세요.",
+              );
+            } finally {
+              setBusy(false);
+            }
+          }}
         >
-          <input
-            className="w-full rounded-xl border border-slate-600 bg-slate-950 p-4 text-white placeholder:text-slate-500"
-            placeholder="이메일"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-
-          <input
-            className="w-full rounded-xl border border-slate-600 bg-slate-950 p-4 text-white placeholder:text-slate-500"
-            type="password"
-            placeholder="비밀번호"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-
-          <button className="w-full rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white">
-            로그인
-          </button>
+          <label>
+            이메일
+            <Input
+              required
+              type="email"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
+          <label>
+            비밀번호
+            <Input
+              required
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          <Button variant="primary" disabled={busy}>
+            {busy ? "로그인 중…" : "로그인"}
+          </Button>
         </form>
-
-        {message && <p className="mt-4 text-red-400">{message}</p>}
-      </section>
+        <Toast message={message} />
+      </Card>
     </main>
   );
 }
