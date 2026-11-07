@@ -24,6 +24,7 @@ import {
   Modal,
 } from "./ui";
 import Markdown from "./Markdown";
+import {savePost} from "@/app/lib/save-post";
 type Form = {
   title: string;
   category: string;
@@ -333,29 +334,21 @@ function EditorBody({ id }: { id?: string }) {
         solved_at: form.solved_at || null,
         page_titles: form.pages.map((_, i) => form.page_titles[i] || ""),
       };
-      const result = id
-        ? await supabase
-            .from("posts")
-            .update(payload)
-            .eq("id", id)
-            .select("id")
-            .single()
-        : await supabase
-            .from("posts")
-            .insert({ ...payload, file_url: "" })
-            .select("id")
-            .single();
-      if (result.error)
-        throw Error(
-          `저장 실패: ${result.error.message} (메타데이터 SQL 적용 여부를 확인하세요.)`,
-        );
+      const result = await savePost(payload,id);
+      const unsavedMetadata = result.omitted.some(field=>{
+        const value=payload[field as keyof typeof payload];
+        return Array.isArray(value)?value.some(x=>Boolean(x)):Boolean(value);
+      });
       setBaseline(JSON.stringify(form));
       allowExit.current = true;
       try {
-        localStorage.removeItem(key);
+        if(unsavedMetadata&&!looksSensitive(JSON.stringify(form))) {
+          localStorage.setItem(key,JSON.stringify({form,savedAt:new Date().toISOString(),pendingMetadata:true}));
+        } else localStorage.removeItem(key);
       } catch {}
+      if(unsavedMetadata)window.alert('제목·카테고리·본문·페이지 순서는 저장했습니다. 현재 DB에서 지원하지 않는 추가 항목은 저장하지 못했습니다. 비밀 키가 포함되지 않은 경우 이 기기에 복구용 초안으로 남겼습니다.');
       setMessage("저장 완료");
-      router.push(`/${encodeURIComponent(form.category)}/${result.data.id}`);
+      router.push(`/${encodeURIComponent(form.category)}/${result.id}`);
     } catch (e) {
       setMessage((e as Error).message);
     } finally {
